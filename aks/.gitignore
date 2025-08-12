@@ -20,4 +20,3 @@ terraform.tfvars.json
 
 # Ignore plan output files
 *.tfplan
-.terraform.lock.hcl
