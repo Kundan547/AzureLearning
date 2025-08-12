@@ -4,7 +4,7 @@ provider "azurerm" {
 
 # Resource Group
 resource "azurerm_resource_group" "aks_rg" {
-  name     = "rg-aks-demo"
+  name     = "rg-aks-uat"
   location = "East US"
 }
 
