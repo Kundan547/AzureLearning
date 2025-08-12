@@ -1,90 +1,229 @@
+
+# Random integer for unique naming
+resource "random_integer" "suffix" {
+  min = 1000
+  max = 9999
+}
+
 # Resource Group
-resource "azurerm_resource_group" "rg" {
+resource "azurerm_resource_group" "main" {
   name     = var.resource_group_name
   location = var.location
+  tags     = var.tags
 }
 
 # Virtual Network
-resource "azurerm_virtual_network" "vnet" {
-  name                = "${var.prefix}-vnet"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  address_space       = ["10.0.0.0/16"]
+resource "azurerm_virtual_network" "main" {
+  name                = var.vnet_name
+  address_space       = var.vnet_address_space
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
 }
 
-# Public Subnets (AKS)
-resource "azurerm_subnet" "public_subnet_1" {
-  name                 = "${var.prefix}-public-1"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.1.0/24"]
+# Public Subnets
+resource "azurerm_subnet" "public_1" {
+  name                 = "subnet-public-shopsite-1"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.public_subnet_1_prefix]
 }
 
-resource "azurerm_subnet" "public_subnet_2" {
-  name                 = "${var.prefix}-public-2"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.2.0/24"]
+resource "azurerm_subnet" "public_2" {
+  name                 = "subnet-public-shopsite-2"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.public_subnet_2_prefix]
 }
 
-# Private Subnets (SQL)
-resource "azurerm_subnet" "private_subnet_1" {
-  name                 = "${var.prefix}-private-1"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.3.0/24"]
+# Private Subnets
+resource "azurerm_subnet" "private_1" {
+  name                 = "subnet-private-shopsite-1"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.private_subnet_1_prefix]
+  service_endpoints    = ["Microsoft.Sql"]
 }
 
-resource "azurerm_subnet" "private_subnet_2" {
-  name                 = "${var.prefix}-private-2"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = ["10.0.4.0/24"]
+resource "azurerm_subnet" "private_2" {
+  name                 = "subnet-private-shopsite-2"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.private_subnet_2_prefix]
+  service_endpoints    = ["Microsoft.Sql"]
 }
 
-# NAT Gateway for Private Subnet Internet Access
-resource "azurerm_public_ip" "nat_ip" {
-  name                = "${var.prefix}-nat-ip"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Static"   
+# AKS Subnet (separate subnet for AKS nodes)
+resource "azurerm_subnet" "aks" {
+  name                 = "subnet-aks-shopsite"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [var.aks_subnet_prefix]
+}
+
+# NAT Gateway for private subnets internet access
+resource "azurerm_public_ip" "nat_gateway" {
+  name                = "pip-nat-gateway-shopsite"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
   sku                 = "Standard"
+  tags                = var.tags
 }
 
-resource "azurerm_nat_gateway" "nat_gw" {
-  name                = "${var.prefix}-nat-gw"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  sku_name            = "Standard"
+resource "azurerm_nat_gateway" "main" {
+  name                    = "nat-gateway-shopsite"
+  location                = azurerm_resource_group.main.location
+  resource_group_name     = azurerm_resource_group.main.name
+  sku_name                = "Standard"
+  idle_timeout_in_minutes = 10
+  tags                    = var.tags
 }
 
-resource "azurerm_nat_gateway_public_ip_association" "nat_ip_assoc" {
-  nat_gateway_id       = azurerm_nat_gateway.nat_gw.id
-  public_ip_address_id = azurerm_public_ip.nat_ip.id
+resource "azurerm_nat_gateway_public_ip_association" "main" {
+  nat_gateway_id       = azurerm_nat_gateway.main.id
+  public_ip_address_id = azurerm_public_ip.nat_gateway.id
 }
 
-resource "azurerm_subnet_nat_gateway_association" "private1_nat_assoc" {
-  subnet_id      = azurerm_subnet.private_subnet_1.id
-  nat_gateway_id = azurerm_nat_gateway.nat_gw.id
+# Associate NAT Gateway with private subnets
+resource "azurerm_subnet_nat_gateway_association" "private_1" {
+  subnet_id      = azurerm_subnet.private_1.id
+  nat_gateway_id = azurerm_nat_gateway.main.id
 }
 
-resource "azurerm_subnet_nat_gateway_association" "private2_nat_assoc" {
-  subnet_id      = azurerm_subnet.private_subnet_2.id
-  nat_gateway_id = azurerm_nat_gateway.nat_gw.id
+resource "azurerm_subnet_nat_gateway_association" "private_2" {
+  subnet_id      = azurerm_subnet.private_2.id
+  nat_gateway_id = azurerm_nat_gateway.main.id
+}
+
+# Network Security Group for SQL Server
+resource "azurerm_network_security_group" "sql" {
+  name                = "nsg-sql-shopsite"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
+
+  security_rule {
+    name                       = "AllowSQLInbound"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "1433"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowInternetOutbound"
+    priority                   = 1001
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "Internet"
+  }
+
+  security_rule {
+    name                       = "AllowAKSOutbound"
+    priority                   = 1002
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = var.aks_subnet_prefix
+  }
+}
+
+# Associate NSG with private subnets
+resource "azurerm_subnet_network_security_group_association" "private_1" {
+  subnet_id                 = azurerm_subnet.private_1.id
+  network_security_group_id = azurerm_network_security_group.sql.id
+}
+
+resource "azurerm_subnet_network_security_group_association" "private_2" {
+  subnet_id                 = azurerm_subnet.private_2.id
+  network_security_group_id = azurerm_network_security_group.sql.id
+}
+
+# Azure SQL Server
+resource "azurerm_mssql_server" "main" {
+  name                         = "${var.sql_server_name_prefix}-${random_integer.suffix.result}"
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  version                      = "12.0"
+  administrator_login          = var.sql_admin_username
+  administrator_login_password = var.sql_admin_password
+  tags                         = var.tags
+}
+
+# Azure SQL Database
+resource "azurerm_mssql_database" "main" {
+  name           = var.sql_database_name
+  server_id      = azurerm_mssql_server.main.id
+  collation      = "SQL_Latin1_General_CP1_CI_AS"
+  license_type   = "LicenseIncluded"
+  max_size_gb    = var.sql_max_size_gb
+  sku_name       = var.sql_sku_name
+  tags           = var.tags
+}
+
+# SQL Server Firewall Rules
+resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
+  name             = "AllowAzureServices"
+  server_id        = azurerm_mssql_server.main.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# Allow access from VNet
+resource "azurerm_mssql_virtual_network_rule" "private_1" {
+  name      = "sql-vnet-rule-private-shopsite-1"
+  server_id = azurerm_mssql_server.main.id
+  subnet_id = azurerm_subnet.private_1.id
+}
+
+resource "azurerm_mssql_virtual_network_rule" "private_2" {
+  name      = "sql-vnet-rule-private-shopsite-2"
+  server_id = azurerm_mssql_server.main.id
+  subnet_id = azurerm_subnet.private_2.id
+}
+
+# Allow access from AKS subnet
+resource "azurerm_mssql_virtual_network_rule" "aks" {
+  name      = "sql-vnet-rule-aks-shopsite"
+  server_id = azurerm_mssql_server.main.id
+  subnet_id = azurerm_subnet.aks.id
 }
 
 # AKS Cluster
-resource "azurerm_kubernetes_cluster" "aks" {
-  name                = "${var.prefix}-aks"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  dns_prefix          = "${var.prefix}-dns"
+resource "azurerm_kubernetes_cluster" "main" {
+  name                = var.cluster_name
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "aks-shopsite"
+  kubernetes_version  = var.kubernetes_version
+  tags                = var.tags
 
   default_node_pool {
-    name            = "nodepool1"
-    node_count      = var.node_count
-    vm_size         = var.node_vm_size
-    vnet_subnet_id  = azurerm_subnet.public_subnet_1.id
+    name                = "shopsite"
+    node_count          = var.aks_node_count
+    vm_size             = var.aks_vm_size
+    os_disk_size_gb     = 30
+    vnet_subnet_id      = azurerm_subnet.aks.id
+    type                = "VirtualMachineScaleSets"
+    enable_auto_scaling = true
+    min_count           = var.aks_min_count
+    max_count           = var.aks_max_count
+
+    upgrade_settings {
+      max_surge = "10%"
+    }
   }
 
   identity {
@@ -92,34 +231,14 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   network_profile {
-    network_plugin = "azure"
+    network_plugin    = "azure"
+    load_balancer_sku = "standard"
   }
 }
 
-# Azure SQL Server
-resource "azurerm_sql_server" "sql" {
-  name                         = "${var.prefix}-sqlserver"
-  resource_group_name          = azurerm_resource_group.rg.name
-  location                     = azurerm_resource_group.rg.location
-  version                      = "12.0"
-  administrator_login          = var.sql_admin_user
-  administrator_login_password = var.sql_admin_password
-}
-
-# Azure SQL Database
-resource "azurerm_sql_database" "sqldb" {
-  name                = "${var.prefix}-sqldb"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  server_name         = azurerm_sql_server.sql.name
-  sku_name            = "S0"
-}
-
-# Whitelist Your Public IP for SQL Access
-resource "azurerm_sql_firewall_rule" "allow_my_ip" {
-  name                = "AllowClientIP"
-  resource_group_name = azurerm_resource_group.rg.name
-  server_name         = azurerm_sql_server.sql.name
-  start_ip_address    = var.my_public_ip
-  end_ip_address      = var.my_public_ip
+# Role assignments for AKS
+resource "azurerm_role_assignment" "aks_network_contributor" {
+  scope                = azurerm_virtual_network.main.id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_kubernetes_cluster.main.identity[0].principal_id
 }
