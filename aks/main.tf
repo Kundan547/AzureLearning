@@ -5,12 +5,12 @@ provider "azurerm" {
 # Resource Group
 resource "azurerm_resource_group" "aks_rg" {
   name     = "rg-aks-uat"
-  location = "East US"
+  location = "East US 2"
 }
 
 # Virtual Network
 resource "azurerm_virtual_network" "aks_vnet" {
-  name                = "vnet-aks-uat"
+  name                = "vnet-aks-shopsite"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.aks_rg.location
   resource_group_name = azurerm_resource_group.aks_rg.name
@@ -48,10 +48,10 @@ resource "azurerm_subnet" "private_subnet2" {
 
 # AKS Cluster
 resource "azurerm_kubernetes_cluster" "aks" {
-  name                = "aks-UAT"
+  name                = "aks-shopsite"
   location            = azurerm_resource_group.aks_rg.location
   resource_group_name = azurerm_resource_group.aks_rg.name
-  dns_prefix          = "aksuat"
+  dns_prefix          = "aks-shopsite"
 
   default_node_pool {
     name       = "nodepool1"
@@ -74,3 +74,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
     azurerm_subnet.private_subnet1
   ]
 }
+
+
+### azure sql server with 2 core and 4GB RAM rds accesbale out of private subnet 
