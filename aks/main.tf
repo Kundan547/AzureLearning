@@ -55,7 +55,7 @@ resource "azurerm_subnet" "private_2" {
 
 # AKS Subnet (separate subnet for AKS nodes)
 resource "azurerm_subnet" "aks" {
-  name                 = "subnet-aks-shopsite"
+  name                 = "subnet-aks-shopsite-uat"
   resource_group_name  = azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = [var.aks_subnet_prefix]
@@ -63,7 +63,7 @@ resource "azurerm_subnet" "aks" {
 
 # NAT Gateway for private subnets internet access
 resource "azurerm_public_ip" "nat_gateway" {
-  name                = "pip-nat-gateway-shopsite"
+  name                = "pip-nat-gateway-shopsite-uat"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
@@ -72,7 +72,7 @@ resource "azurerm_public_ip" "nat_gateway" {
 }
 
 resource "azurerm_nat_gateway" "main" {
-  name                    = "nat-gateway-shopsite"
+  name                    = "nat-gateway-shopsite-uat"
   location                = azurerm_resource_group.main.location
   resource_group_name     = azurerm_resource_group.main.name
   sku_name                = "Standard"
